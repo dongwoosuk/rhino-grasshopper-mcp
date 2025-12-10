@@ -1,0 +1,38 @@
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local data (DO NOT COMMIT)
+layout_preferences.json
+advanced_learning_data.json
+layout_learning_data.json
+
+# Environment variables
+.env
+.env.local
