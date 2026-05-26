@@ -15,7 +15,7 @@ class RhinoBridge:
     def __init__(self, host: str = "localhost", port: int = 8080):
         self.host = host
         self.port = port
-        self.timeout = 30.0  # 30 second timeout for operations
+        self.timeout = 180.0  # 180s timeout (was 30s — too short for heavy mass+panel builds)
 
     def _send_command(self, command: dict) -> dict:
         """Send a command to the Rhino listener and get response"""
@@ -276,6 +276,46 @@ class RhinoBridge:
             "guid": guid,
             "value": value,
             "param_index": param_index
+        })
+
+    async def set_script(
+        self,
+        guid: str = None,
+        nickname: str = None,
+        code: str = None,
+        file_path: str = None,
+        recompute: bool = True
+    ) -> dict:
+        """
+        Inject Python source into a live Rhino 8 Script component and recompute.
+
+        Source is provided either inline via `code` or by `file_path` (read here,
+        server-side, so encoding is correct and the listener needs no file access).
+        The code is sent as a JSON string field — json.dumps escapes real newlines
+        to \\n, so the protocol's "\\n\\n" terminator only appears at the end and
+        multi-KB scripts transit the socket safely.
+
+        Returns {"success", "setter_used", "runtime_messages", "errors", ...} or error.
+        """
+        if file_path and code is None:
+            p = Path(file_path)
+            if not p.exists():
+                return {"success": False, "error": f"File not found: {file_path}"}
+            try:
+                code = p.read_text(encoding="utf-8")
+            except Exception as e:
+                return {"success": False, "error": f"Failed to read {file_path}: {e}"}
+        if code is None:
+            return {"success": False, "error": "Provide 'code' or 'file_path'"}
+        if not guid and not nickname:
+            return {"success": False, "error": "Provide 'guid' or 'nickname'"}
+
+        return self._send_command({
+            "command": "set_script",
+            "guid": guid,
+            "nickname": nickname,
+            "code": code,
+            "recompute": recompute
         })
 
     async def move_component(self, guid: str, x: float, y: float) -> dict:

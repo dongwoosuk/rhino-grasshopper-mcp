@@ -420,6 +420,13 @@ class RhinoBridgeListener:
                 value = request.get('value')
                 param_index = request.get('param_index', 0)
                 result = self._set_component_value(guid, value, param_index)
+            elif command == 'set_script':
+                result = self._set_script(
+                    request.get('guid'),
+                    request.get('nickname'),
+                    request.get('code', ''),
+                    request.get('recompute', True)
+                )
             elif command == 'move_component':
                 guid = request.get('guid', '')
                 x = request.get('x', 0)
@@ -1359,6 +1366,162 @@ class RhinoBridgeListener:
                 'traceback': traceback.format_exc()
             }
 
+    def _find_by_nickname(self, doc, nickname):
+        """Return the first canvas object whose NickName matches (best-effort)."""
+        for o in doc.Objects:
+            if getattr(o, 'NickName', None) == nickname:
+                return o
+        return None
+
+    def _collect_runtime_messages(self, obj):
+        """Return [{'level','text'}] from a component's runtime messages (errors/warnings)."""
+        msgs = []
+        try:
+            import Grasshopper
+            GHL = Grasshopper.Kernel.GH_RuntimeMessageLevel
+            for lvl, label in ((GHL.Error, 'error'),
+                               (GHL.Warning, 'warning'),
+                               (GHL.Remark, 'remark')):
+                try:
+                    for m in obj.RuntimeMessages(lvl):
+                        msgs.append({'level': label, 'text': m})
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return msgs
+
+    def _set_script_source(self, obj, code):
+        """Set source on a script component. Try public attrs first, then reflect
+        over public+non-public writable string properties/fields. Returns the member
+        name used (or None if no usable setter was found)."""
+        import System
+        from System.Reflection import BindingFlags
+
+        # 0) Rhino 8 Script components (RhinoCodePluginGH.*): public SetSource(str).
+        # Confirmed on RhinoCodePluginGH.Components.Python3Component — the script text
+        # lives behind SetSource/TryGetSource, not a plain property.
+        try:
+            if hasattr(obj, 'SetSource'):
+                obj.SetSource(code)
+                return 'SetSource'
+        except Exception:
+            pass
+
+        candidates = ('Code', 'Text', 'ScriptSource', 'SourceCode', 'Source', 'ScriptText')
+        # 1) Direct public attribute (legacy GhPython exposes a settable .Code prop)
+        for c in candidates:
+            try:
+                if hasattr(obj, c):
+                    setattr(obj, c, code)
+                    return c
+            except Exception:
+                continue
+
+        t = obj.GetType()
+        FLAGS = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+        KEYS = ('code', 'text', 'script', 'source')
+
+        # 2) Reflection over writable string properties
+        for p in t.GetProperties(FLAGS):
+            try:
+                nm = p.Name
+                if (p.CanWrite and p.PropertyType == System.String
+                        and any(k in nm.lower() for k in KEYS)):
+                    p.SetValue(obj, code, None)
+                    return 'prop:' + nm
+            except Exception:
+                continue
+
+        # 3) Reflection over string fields
+        for f in t.GetFields(FLAGS):
+            try:
+                nm = f.Name
+                if f.FieldType == System.String and any(k in nm.lower() for k in KEYS):
+                    f.SetValue(obj, code)
+                    return 'field:' + nm
+            except Exception:
+                continue
+
+        return None
+
+    def _set_script(self, guid, nickname, code, recompute=True):
+        """Inject Python source into a live Script component and (optionally) recompute,
+        returning any captured compile/runtime errors for the auto-iteration loop."""
+        if not IN_RHINO:
+            return {'success': False, 'error': 'Not running in Rhino'}
+
+        try:
+            import Grasshopper
+            import System
+
+            canvas = Grasshopper.Instances.ActiveCanvas
+            if canvas is None:
+                return {'success': False, 'error': 'No active Grasshopper canvas'}
+
+            doc = canvas.Document
+            if doc is None:
+                return {'success': False, 'error': 'No Grasshopper document'}
+
+            obj = None
+            if guid:
+                try:
+                    obj = doc.FindObject(System.Guid(guid), True)
+                except Exception:
+                    obj = None
+            if obj is None and nickname:
+                obj = self._find_by_nickname(doc, nickname)
+            if obj is None:
+                return {'success': False,
+                        'error': 'Script component not found (guid/nickname)'}
+
+            type_full = obj.GetType().FullName
+            type_name = obj.GetType().Name
+            is_scriptish = ('RhinoCodePluginGH' in type_full
+                            or 'Script' in type_name
+                            or 'Python' in type_name
+                            or hasattr(obj, 'Code'))
+            if not is_scriptish:
+                return {'success': False,
+                        'error': 'Not a Script component: %s' % type_full}
+
+            used = self._set_script_source(obj, code)
+            if used is None:
+                return {'success': False,
+                        'error': 'No usable source setter on %s' % type_full,
+                        'hint': 'Re-run the probe; component may need Approach B '
+                                '(external module + reload stub).'}
+
+            if recompute:
+                try:
+                    obj.ClearData()
+                except Exception:
+                    pass
+                obj.ExpireSolution(True)
+                doc.NewSolution(False)
+                canvas.Refresh()
+
+            msgs = self._collect_runtime_messages(obj)
+            errs = [m for m in msgs if m['level'] == 'error']
+            return {
+                'success': len(errs) == 0,
+                'guid': str(obj.InstanceGuid),
+                'nickname': getattr(obj, 'NickName', ''),
+                'setter_used': used,
+                'type': type_full,
+                'recomputed': bool(recompute),
+                'runtime_messages': msgs,
+                'errors': errs,
+                'chars_set': len(code)
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'traceback': traceback.format_exc()
+            }
+
     def _move_component(self, guid, x, y):
         """Move a component to a new position"""
         if not IN_RHINO:
@@ -1524,6 +1687,13 @@ class RhinoBridgeListener:
                         'type': param.TypeName,
                         'recipient_count': param.RecipientCount
                     })
+
+            # Runtime messages (errors/warnings) — lets gh_get_component_info double as
+            # a "did my last script edit error?" probe for the auto-iteration loop.
+            try:
+                info['runtime_messages'] = self._collect_runtime_messages(obj)
+            except Exception:
+                info['runtime_messages'] = []
 
             return info
 

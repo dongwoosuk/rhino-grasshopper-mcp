@@ -551,6 +551,43 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
+            name="gh_set_script",
+            description=(
+                "Push Python source into a live Rhino 8 Script (CPython3) component on the "
+                "canvas and recompute it. Provide the source via 'code' OR 'file_path'. "
+                "Identify the component by 'guid' (preferred) or 'nickname'. Returns success "
+                "plus any compile/runtime error text captured from the component — use this "
+                "to auto-iterate (edit file, push, read errors, fix, repeat)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "guid": {
+                        "type": "string",
+                        "description": "GUID of the Script component (preferred)"
+                    },
+                    "nickname": {
+                        "type": "string",
+                        "description": "Nickname of the Script component (used if guid omitted)"
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": "Python source to inject (inline). Use this OR file_path."
+                    },
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to a .py file; read server-side and sent as the source."
+                    },
+                    "recompute": {
+                        "type": "boolean",
+                        "description": "Force ExpireSolution + NewSolution after setting source",
+                        "default": True
+                    }
+                },
+                "required": []
+            }
+        ),
+        Tool(
             name="gh_delete_component",
             description="Delete a component from the canvas.",
             inputSchema={
@@ -1409,6 +1446,17 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 guid=guid,
                 value=value,
                 param_index=param_index
+            )
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        elif name == "gh_set_script":
+            bridge = get_bridge()
+            result = await bridge.set_script(
+                guid=arguments.get("guid"),
+                nickname=arguments.get("nickname"),
+                code=arguments.get("code"),
+                file_path=arguments.get("file_path"),
+                recompute=arguments.get("recompute", True)
             )
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
