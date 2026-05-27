@@ -1445,6 +1445,39 @@ class RhinoBridgeListener:
 
         return None
 
+    def _invoke_on_ui(self, func):
+        """Run a zero-arg callable on Rhino's UI thread and return its result.
+
+        SetSource closes the component's ScriptEditor window when it is open, which is a
+        WPF UI-thread-only operation; calling it from this background listener thread
+        otherwise throws 'The calling thread cannot access this object...'. Falls back to
+        a direct call if marshaling is unavailable (e.g. already on the UI thread)."""
+        import Rhino
+        import System
+        from System.Threading import ManualResetEvent
+        box = {}
+        marshaled = False
+        try:
+            evt = ManualResetEvent(False)
+
+            def _run():
+                try:
+                    box['result'] = func()
+                except Exception as e:
+                    box['exc'] = e
+                finally:
+                    evt.Set()
+
+            Rhino.RhinoApp.InvokeOnUiThread(System.Action(_run))
+            marshaled = evt.WaitOne(120000)
+        except Exception:
+            marshaled = False
+        if not marshaled:
+            return func()
+        if 'exc' in box:
+            raise box['exc']
+        return box.get('result')
+
     def _set_script(self, guid, nickname, code, recompute=True):
         """Inject Python source into a live Script component and (optionally) recompute,
         returning any captured compile/runtime errors for the auto-iteration loop."""
@@ -1485,7 +1518,9 @@ class RhinoBridgeListener:
                 return {'success': False,
                         'error': 'Not a Script component: %s' % type_full}
 
-            used = self._set_script_source(obj, code)
+            # SetSource may close the component's open ScriptEditor window (a UI-thread-only
+            # WPF op), so marshal the whole setter to the UI thread to avoid a cross-thread crash.
+            used = self._invoke_on_ui(lambda: self._set_script_source(obj, code))
             if used is None:
                 return {'success': False,
                         'error': 'No usable source setter on %s' % type_full,
