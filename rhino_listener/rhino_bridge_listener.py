@@ -1478,6 +1478,46 @@ class RhinoBridgeListener:
             raise box['exc']
         return box.get('result')
 
+    def _marsh_get(self, obj):
+        """Read a Rhino 8 Script component's marshalling flags (MarshInputs/MarshOutputs/
+        MarshGuids), returning {name: bool} for those present. CRITICAL: SetSource resets
+        these to False, which breaks input AND output marshalling — geometry list outputs
+        then stringify (display as '[<Rhino.Geometry.Brep object ...>]') and inputs arrive
+        untyped (e.g. List[Object] instead of List[float])."""
+        from System.Reflection import BindingFlags
+        DECL = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly
+        vals = {}
+        for short in ("MarshInputs", "MarshOutputs", "MarshGuids"):
+            fn = "RhinoCodePlatform.GH.IScriptComponent." + short
+            ty = obj.GetType()
+            while ty is not None:
+                p = ty.GetProperty(fn, DECL)
+                if p is not None:
+                    try:
+                        vals[short] = p.GetValue(obj)
+                    except Exception:
+                        pass
+                    break
+                ty = ty.BaseType
+        return vals
+
+    def _marsh_set(self, obj, vals):
+        """Restore marshalling flags captured by _marsh_get (after SetSource clobbers them)."""
+        from System.Reflection import BindingFlags
+        DECL = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly
+        for short, val in vals.items():
+            fn = "RhinoCodePlatform.GH.IScriptComponent." + short
+            ty = obj.GetType()
+            while ty is not None:
+                p = ty.GetProperty(fn, DECL)
+                if p is not None and p.CanWrite:
+                    try:
+                        p.SetValue(obj, val)
+                    except Exception:
+                        pass
+                    break
+                ty = ty.BaseType
+
     def _set_script(self, guid, nickname, code, recompute=True):
         """Inject Python source into a live Script component and (optionally) recompute,
         returning any captured compile/runtime errors for the auto-iteration loop."""
@@ -1518,6 +1558,12 @@ class RhinoBridgeListener:
                 return {'success': False,
                         'error': 'Not a Script component: %s' % type_full}
 
+            # SetSource resets the Rhino 8 Script component's marshalling flags
+            # (MarshInputs/MarshOutputs/MarshGuids) to False, which breaks input AND output
+            # marshalling — geometry list outputs stringify and inputs arrive untyped.
+            # Capture them before the setter, restore after.
+            _marsh = self._marsh_get(obj)
+
             # SetSource may close the component's open ScriptEditor window (a UI-thread-only
             # WPF op), so marshal the whole setter to the UI thread to avoid a cross-thread crash.
             used = self._invoke_on_ui(lambda: self._set_script_source(obj, code))
@@ -1526,6 +1572,10 @@ class RhinoBridgeListener:
                         'error': 'No usable source setter on %s' % type_full,
                         'hint': 'Re-run the probe; component may need Approach B '
                                 '(external module + reload stub).'}
+
+            # Restore marshalling flags clobbered by SetSource (else geometry outputs stringify).
+            if _marsh:
+                self._marsh_set(obj, _marsh)
 
             if recompute:
                 try:
@@ -1547,7 +1597,8 @@ class RhinoBridgeListener:
                 'recomputed': bool(recompute),
                 'runtime_messages': msgs,
                 'errors': errs,
-                'chars_set': len(code)
+                'chars_set': len(code),
+                'marsh_restored': _marsh
             }
 
         except Exception as e:
