@@ -538,8 +538,40 @@ class RhinoBridgeListener:
                 except:
                     pass
 
-            # Execute the code
-            exec(code, namespace)
+            # Execute the code ON THE UI THREAD.  The listener runs on a background
+            # thread; RhinoDoc is NOT thread-safe, so mutating doc objects here while
+            # the user touches the UI (e.g. the Layers panel) races and crashes Rhino.
+            # Marshal exec() onto the main UI thread so all doc edits are serialized
+            # with the UI.  Falls back to a direct call if marshaling is unavailable.
+            _box = {}
+
+            def _run_exec():
+                try:
+                    exec(code, namespace)
+                except Exception as _e:
+                    _box['exc'] = _e
+
+            _ran_on_ui = False
+            if IN_RHINO:
+                try:
+                    import System
+                    from System.Threading import ManualResetEvent
+                    _evt = ManualResetEvent(False)
+
+                    def _wrap():
+                        try:
+                            _run_exec()
+                        finally:
+                            _evt.Set()
+
+                    Rhino.RhinoApp.InvokeOnUiThread(System.Action(_wrap))
+                    _ran_on_ui = _evt.WaitOne(600000)   # up to 10 min for heavy builds
+                except Exception:
+                    _ran_on_ui = False
+            if not _ran_on_ui:
+                _run_exec()                              # direct fallback
+            if 'exc' in _box:
+                raise _box['exc']                        # surface to the handler below
 
             # Check for a 'result' variable in the namespace
             if 'result' in namespace:
