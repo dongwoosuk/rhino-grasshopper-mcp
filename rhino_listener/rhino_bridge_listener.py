@@ -546,10 +546,28 @@ class RhinoBridgeListener:
             _box = {}
 
             def _run_exec():
+                # Wrap every MCP execution in ONE undo record so all its doc edits (adds, deletes,
+                # transforms) collapse to a single Ctrl+Z for the user -- and so Delete() records
+                # undo instead of vanishing.  (Use doc.Objects.Delete, NOT Purge: Purge is permanent
+                # and cannot be undone.)
+                _urec = None; _udoc = None
                 try:
+                    if IN_RHINO:
+                        try:
+                            _udoc = Rhino.RhinoDoc.ActiveDoc
+                            _udoc.UndoRecordingEnabled = True
+                            _urec = _udoc.BeginUndoRecord("MCP script")
+                        except Exception:
+                            _urec = None
                     exec(code, namespace)
                 except Exception as _e:
                     _box['exc'] = _e
+                finally:
+                    if _urec:
+                        try:
+                            _udoc.EndUndoRecord(_urec)
+                        except Exception:
+                            pass
 
             _ran_on_ui = False
             if IN_RHINO:
