@@ -725,6 +725,78 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
+            name="joseki_search",
+            description=(
+                "Search the Joseki corpus — the studio's parsed archive of GH definitions and "
+                "Rhino Python scripts (kifu), distilled into algorithm cards and a move index. "
+                "USE THIS FIRST, before writing any new GH/Rhino algorithm: it finds proven "
+                "patterns to start from instead of starting from zero. Two modes: 'query' searches "
+                "definitions (name>tag>intent>motif weighted), 'move' searches reusable techniques "
+                "(the unit you actually compose with). Filters: grade (provenance — 'practice' cuts "
+                "tutorial/reference noise, which dominates the corpus), dep ('native' = no plugin), "
+                "hide_flagged, tag, servable (headless/HOGER-ready), packaged (RH_IN/RH_OUT convention). "
+                "Each result carries kind ('gh' = canvas definition, 'python' = plain Rhino script such "
+                "as the calpoly_* facade family) plus the original file path. Results with "
+                "has_card=false have no written card yet and were matched through their graph digest — "
+                "they tell you the definition exists and what it is built from, not why. "
+                "Present candidates with trade-offs — the designer chooses; never force one answer."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Free-text terms over definition name/tags/intent/motifs (Korean or English)"
+                    },
+                    "move": {
+                        "type": "string",
+                        "description": "Search the move index instead — reusable techniques 수 (e.g. '커브 분할 배치', 'corner')"
+                    },
+                    "tag": {
+                        "type": "string",
+                        "description": "Filter by tag substring (e.g. facade, calpoly-bldgc, digit-vol1, soku-personal)"
+                    },
+                    "grade": {
+                        "type": "string",
+                        "enum": ["practice", "edu", "reference", "vendor"],
+                        "description": "Provenance filter. 'practice' = real project work (highest signal); edu/reference/vendor are tutorials, definition sheets and plugin samples"
+                    },
+                    "dep": {
+                        "type": "string",
+                        "description": "Plugin dependency filter; 'native' means no plugin required (e.g. native, Ladybug, Kangaroo)"
+                    },
+                    "hide_flagged": {
+                        "type": "boolean",
+                        "description": "Exclude cards stamped with a ⚠ 자동 검증 mismatch by verify_cards.py"
+                    },
+                    "servable": {
+                        "type": "boolean",
+                        "description": "Only definitions runnable headless (no external Rhino refs, no interactive plugins)"
+                    },
+                    "packaged": {
+                        "type": "boolean",
+                        "description": "Only definitions already packaged with RH_IN:/RH_OUT: groups"
+                    },
+                    "show": {
+                        "type": "string",
+                        "description": "Instead of searching, print the full card for this definition name"
+                    },
+                    "digest": {
+                        "type": "boolean",
+                        "description": "With 'show', return the 3 KB graph digest instead of the card"
+                    },
+                    "stats": {
+                        "type": "boolean",
+                        "description": "Return corpus statistics (counts, top tags)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results (default 8)"
+                    }
+                }
+            }
+        ),
+        Tool(
             name="ml_learning_summary",
             description="Get summary of accumulated learning data including total sessions, component patterns, and spacing statistics.",
             inputSchema={
@@ -1633,6 +1705,29 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             )
 
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        elif name == "joseki_search":
+            from . import joseki as _joseki
+
+            if arguments.get("stats"):
+                result = _joseki.stats()
+            elif arguments.get("show"):
+                result = _joseki.show(arguments["show"],
+                                      digest=bool(arguments.get("digest")))
+            else:
+                result = _joseki.search(
+                    query=arguments.get("query"),
+                    move=arguments.get("move"),
+                    tag=arguments.get("tag"),
+                    grade=arguments.get("grade"),
+                    dep=arguments.get("dep"),
+                    hide_flagged=bool(arguments.get("hide_flagged")),
+                    servable=bool(arguments.get("servable")),
+                    packaged=bool(arguments.get("packaged")),
+                    limit=int(arguments.get("limit", 8)),
+                )
+
+            return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
         elif name == "ml_learning_summary":
             if not _persistent_learner_available:
