@@ -5,6 +5,8 @@ Connects to running Rhino instances via TCP socket to the bridge listener
 
 import json
 import socket
+import asyncio
+import threading
 from typing import Optional, Any
 from pathlib import Path
 
@@ -16,9 +18,16 @@ class RhinoBridge:
         self.host = host
         self.port = port
         self.timeout = 180.0  # 180s timeout (was 30s — too short for heavy mass+panel builds)
+        self._command_lock = threading.Lock()
 
     def _send_command(self, command: dict) -> dict:
+        # Keep document operations ordered while allowing the MCP loop to respond.
+        with self._command_lock:
+            return self._send_command_sync(command)
+
+    def _send_command_sync(self, command: dict) -> dict:
         """Send a command to the Rhino listener and get response"""
+        sock = None
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(self.timeout)
@@ -58,6 +67,10 @@ class RhinoBridge:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+        finally:
+            if sock is not None:
+                sock.close()
+
     def is_rhino_running(self) -> bool:
         """Check if Rhino is running and listening"""
         result = self._send_command({"command": "ping"})
@@ -90,7 +103,7 @@ class RhinoBridge:
         if not code.strip():
             return {"success": False, "error": "No code provided"}
 
-        result = self._send_command({
+        result = await asyncio.to_thread(self._send_command, {
             "command": "execute",
             "code": code
         })
@@ -99,7 +112,13 @@ class RhinoBridge:
 
     async def get_grasshopper_state(self) -> dict:
         """Get current state of Grasshopper canvas"""
-        return self._send_command({"command": "gh_state"})
+        return await asyncio.to_thread(self._send_command, {"command": "gh_state"})
+
+    async def move_components(self, moves: list, layout_options=None, expected_revision=None) -> dict:
+        """Preflight and apply layout in one UI operation, without touching wires."""
+        return await asyncio.to_thread(self._send_command, {
+            'command': 'move_components', 'moves': moves, 'layout_options': layout_options,
+            'expected_revision': expected_revision})
 
     async def load_gh_definition(self, file_path: str) -> dict:
         """Load a .gh/.ghx file into Grasshopper"""
@@ -110,14 +129,14 @@ class RhinoBridge:
         if path.suffix.lower() not in [".gh", ".ghx"]:
             return {"success": False, "error": "File must be .gh or .ghx"}
 
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "load_gh",
             "file_path": str(path.resolve())
         })
 
     async def solve_definition(self) -> dict:
         """Trigger a solve of the current Grasshopper definition"""
-        return self._send_command({"command": "solve"})
+        return await asyncio.to_thread(self._send_command, {"command": "solve"})
 
     async def highlight_components(self, guids: list, color: tuple) -> dict:
         """
@@ -127,7 +146,7 @@ class RhinoBridge:
             guids: List of component GUIDs to highlight
             color: RGB tuple (r, g, b) for highlight color
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "highlight_components",
             "guids": guids,
             "color": list(color)
@@ -140,7 +159,7 @@ class RhinoBridge:
         Args:
             guids: Optional list of GUIDs to clear. If None, clears all.
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "clear_highlights",
             "guids": guids
         })
@@ -174,7 +193,7 @@ class RhinoBridge:
         Returns:
             {"success": True, "guid": "...", "name": "..."} or error
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "add_component",
             "name": name,
             "x": x,
@@ -183,6 +202,52 @@ class RhinoBridge:
             "category": category,
             "subcategory": subcategory,
             "delay": delay
+        })
+
+    async def search_components(
+        self,
+        query: str,
+        category: str = None,
+        subcategory: str = None,
+        limit: int = 30,
+        include_deprecated: bool = False,
+    ) -> dict:
+        """Search the live Grasshopper component server."""
+        return await asyncio.to_thread(self._send_command, {
+            "command": "search_components",
+            "query": query,
+            "category": category,
+            "subcategory": subcategory,
+            "limit": limit,
+            "include_deprecated": include_deprecated,
+        })
+
+    async def describe_component(self, selector: str, include_deprecated: bool = False) -> dict:
+        """Describe a live GH component by name, nickname, or proxy GUID."""
+        return await asyncio.to_thread(self._send_command, {
+            "command": "describe_component",
+            "selector": selector,
+            "include_deprecated": include_deprecated,
+        })
+
+    async def apply_graph(
+        self,
+        sliders: list,
+        components: list,
+        wires: list,
+        solve: bool = True,
+        replace: bool = True,
+        include_deprecated: bool = False,
+    ) -> dict:
+        """Place and wire a GH graph in one transaction-like request."""
+        return await asyncio.to_thread(self._send_command, {
+            "command": "apply_graph",
+            "sliders": sliders or [],
+            "components": components or [],
+            "wires": wires or [],
+            "solve": solve,
+            "replace": replace,
+            "include_deprecated": include_deprecated,
         })
 
     async def connect_components(
@@ -204,7 +269,7 @@ class RhinoBridge:
         Returns:
             {"success": True} or error
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "connect_components",
             "source_guid": source_guid,
             "source_output": source_output,
@@ -231,7 +296,7 @@ class RhinoBridge:
         Returns:
             {"success": True} or error
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "disconnect_components",
             "source_guid": source_guid,
             "source_output": source_output,
@@ -249,7 +314,7 @@ class RhinoBridge:
         Returns:
             {"success": True} or error
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "delete_component",
             "guid": guid
         })
@@ -271,7 +336,7 @@ class RhinoBridge:
         Returns:
             {"success": True} or error
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "set_value",
             "guid": guid,
             "value": value,
@@ -310,7 +375,7 @@ class RhinoBridge:
         if not guid and not nickname:
             return {"success": False, "error": "Provide 'guid' or 'nickname'"}
 
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "set_script",
             "guid": guid,
             "nickname": nickname,
@@ -330,7 +395,7 @@ class RhinoBridge:
         Returns:
             {"success": True} or error
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "move_component",
             "guid": guid,
             "x": x,
@@ -354,7 +419,7 @@ class RhinoBridge:
         Returns:
             {"success": True, "group_guid": "..."} or error
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "create_group",
             "guids": guids,
             "name": name,
@@ -371,7 +436,7 @@ class RhinoBridge:
         Returns:
             Component details including inputs, outputs, values
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "get_component_info",
             "guid": guid
         })
@@ -383,7 +448,7 @@ class RhinoBridge:
         Returns:
             {"success": True} or error
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "new_definition"
         })
 
@@ -397,7 +462,7 @@ class RhinoBridge:
         Returns:
             {"success": True, "path": "..."} or error
         """
-        return self._send_command({
+        return await asyncio.to_thread(self._send_command, {
             "command": "save_definition",
             "file_path": file_path
         })

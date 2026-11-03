@@ -1,0 +1,590 @@
+{
+  "success": true,
+  "components": [
+    {
+      "guid": "node_0",
+      "name": "Number Slider",
+      "nickname": "",
+      "category": "Params",
+      "subcategory": "Input",
+      "x": 0.0,
+      "y": 0.0,
+      "width": 250.0,
+      "height": 20.0,
+      "bounds": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 250.0,
+        "height": 20.0
+      },
+      "inputs": [
+        {
+          "name": "Number Slider",
+          "nickname": "",
+          "description": "Numeric slider for single values",
+          "type": "Number",
+          "access": "item",
+          "optional": false,
+          "x": 0.0,
+          "y": 10.0
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Number Slider",
+          "nickname": "",
+          "description": "Numeric slider for single values",
+          "type": "Number",
+          "access": "item",
+          "optional": false,
+          "x": 250.0,
+          "y": 10.0
+        }
+      ],
+      "type": "slider",
+      "input_count": 1,
+      "output_count": 1,
+      "value": 2.0,
+      "min": 0.0,
+      "max": 10.0
+    },
+    {
+      "guid": "node_1",
+      "name": "Number Slider",
+      "nickname": "",
+      "category": "Params",
+      "subcategory": "Input",
+      "x": 0.0,
+      "y": 120.0,
+      "width": 250.0,
+      "height": 20.0,
+      "bounds": {
+        "x": 0.0,
+        "y": 120.0,
+        "width": 250.0,
+        "height": 20.0
+      },
+      "inputs": [
+        {
+          "name": "Number Slider",
+          "nickname": "",
+          "description": "Numeric slider for single values",
+          "type": "Number",
+          "access": "item",
+          "optional": false,
+          "x": 0.0,
+          "y": 130.0
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Number Slider",
+          "nickname": "",
+          "description": "Numeric slider for single values",
+          "type": "Number",
+          "access": "item",
+          "optional": false,
+          "x": 250.0,
+          "y": 130.0
+        }
+      ],
+      "type": "slider",
+      "input_count": 1,
+      "output_count": 1,
+      "value": 3.0,
+      "min": 0.0,
+      "max": 10.0
+    },
+    {
+      "guid": "node_2",
+      "name": "Addition",
+      "nickname": "A+B",
+      "category": "Maths",
+      "subcategory": "Operators",
+      "x": 250.0,
+      "y": 80.0,
+      "width": 65.0,
+      "height": 44.0,
+      "bounds": {
+        "x": 219.0,
+        "y": 58.0,
+        "width": 65.0,
+        "height": 44.0
+      },
+      "inputs": [
+        {
+          "name": "A",
+          "nickname": "A",
+          "description": "First item for addition",
+          "type": "Generic Data",
+          "access": "item",
+          "optional": true,
+          "x": 221.0,
+          "y": 70.0
+        },
+        {
+          "name": "B",
+          "nickname": "B",
+          "description": "Second item for addition",
+          "type": "Generic Data",
+          "access": "item",
+          "optional": true,
+          "x": 221.0,
+          "y": 90.0
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Result",
+          "nickname": "R",
+          "description": "Result of addition",
+          "type": "Generic Data",
+          "access": "item",
+          "optional": false,
+          "x": 282.0,
+          "y": 80.0
+        }
+      ],
+      "type": "component",
+      "input_count": 2,
+      "output_count": 1
+    },
+    {
+      "guid": "node_3",
+      "name": "Python 3 Script",
+      "nickname": "Py3",
+      "category": "Maths",
+      "subcategory": "Script",
+      "x": 600.0,
+      "y": 120.0,
+      "width": 72.0,
+      "height": 44.0,
+      "bounds": {
+        "x": 571.0,
+        "y": 98.0,
+        "width": 72.0,
+        "height": 44.0
+      },
+      "inputs": [
+        {
+          "name": "x",
+          "nickname": "x",
+          "description": "rhinoscriptsyntax geometry",
+          "type": "Generic Data",
+          "access": "item",
+          "optional": true,
+          "x": 573.0,
+          "y": 110.0
+        },
+        {
+          "name": "y",
+          "nickname": "y",
+          "description": "rhinoscriptsyntax geometry",
+          "type": "Generic Data",
+          "access": "item",
+          "optional": true,
+          "x": 573.0,
+          "y": 130.0
+        }
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "nickname": "out",
+          "description": "Standard output and error contents collected during script run",
+          "type": "Text",
+          "access": "item",
+          "optional": false,
+          "x": 641.0,
+          "y": 110.0
+        },
+        {
+          "name": "a",
+          "nickname": "a",
+          "description": "rhinoscriptsyntax geometry",
+          "type": "Generic Data",
+          "access": "item",
+          "optional": false,
+          "x": 641.0,
+          "y": 130.0
+        }
+      ],
+      "type": "component",
+      "input_count": 2,
+      "output_count": 2
+    },
+    {
+      "guid": "node_4",
+      "name": "EF Data Description (R6)",
+      "nickname": "A",
+      "category": "Elefront (R6)",
+      "subcategory": "08 Params",
+      "x": 81.0,
+      "y": 70.0,
+      "width": 50.0,
+      "height": 20.0,
+      "bounds": {
+        "x": 56.0,
+        "y": 60.0,
+        "width": 50.0,
+        "height": 20.0
+      },
+      "inputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "A",
+          "description": "A+B: First item for addition",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 56.0,
+          "y": 70.0
+        }
+      ],
+      "outputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "A",
+          "description": "A+B: First item for addition",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 106.0,
+          "y": 70.0
+        }
+      ],
+      "type": "param",
+      "input_count": 1,
+      "output_count": 1
+    },
+    {
+      "guid": "node_5",
+      "name": "EF Data Description (R6)",
+      "nickname": "B",
+      "category": "Elefront (R6)",
+      "subcategory": "08 Params",
+      "x": 81.0,
+      "y": 90.0,
+      "width": 50.0,
+      "height": 20.0,
+      "bounds": {
+        "x": 56.0,
+        "y": 80.0,
+        "width": 50.0,
+        "height": 20.0
+      },
+      "inputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "B",
+          "description": "A+B: Second item for addition",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 56.0,
+          "y": 90.0
+        }
+      ],
+      "outputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "B",
+          "description": "A+B: Second item for addition",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 106.0,
+          "y": 90.0
+        }
+      ],
+      "type": "param",
+      "input_count": 1,
+      "output_count": 1
+    },
+    {
+      "guid": "node_6",
+      "name": "EF Data Description (R6)",
+      "nickname": "Result",
+      "category": "Elefront (R6)",
+      "subcategory": "08 Params",
+      "x": 422.0,
+      "y": 80.0,
+      "width": 50.0,
+      "height": 20.0,
+      "bounds": {
+        "x": 397.0,
+        "y": 70.0,
+        "width": 50.0,
+        "height": 20.0
+      },
+      "inputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "Result",
+          "description": "A+B: Result of addition",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 397.0,
+          "y": 80.0
+        }
+      ],
+      "outputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "Result",
+          "description": "A+B: Result of addition",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 447.0,
+          "y": 80.0
+        }
+      ],
+      "type": "param",
+      "input_count": 1,
+      "output_count": 1
+    },
+    {
+      "guid": "node_7",
+      "name": "EF Data Description (R6)",
+      "nickname": "Result",
+      "category": "Elefront (R6)",
+      "subcategory": "08 Params",
+      "x": 433.0,
+      "y": 110.0,
+      "width": 50.0,
+      "height": 20.0,
+      "bounds": {
+        "x": 408.0,
+        "y": 100.0,
+        "width": 50.0,
+        "height": 20.0
+      },
+      "inputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "Result",
+          "description": "Py3: No conversion",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 408.0,
+          "y": 110.0
+        }
+      ],
+      "outputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "Result",
+          "description": "Py3: No conversion",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 458.0,
+          "y": 110.0
+        }
+      ],
+      "type": "param",
+      "input_count": 1,
+      "output_count": 1
+    },
+    {
+      "guid": "node_8",
+      "name": "EF Data Description (R6)",
+      "nickname": "y",
+      "category": "Elefront (R6)",
+      "subcategory": "08 Params",
+      "x": 433.0,
+      "y": 130.0,
+      "width": 50.0,
+      "height": 20.0,
+      "bounds": {
+        "x": 408.0,
+        "y": 120.0,
+        "width": 50.0,
+        "height": 20.0
+      },
+      "inputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "y",
+          "description": "Py3: No conversion",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 408.0,
+          "y": 130.0
+        }
+      ],
+      "outputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "y",
+          "description": "Py3: No conversion",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 458.0,
+          "y": 130.0
+        }
+      ],
+      "type": "param",
+      "input_count": 1,
+      "output_count": 1
+    },
+    {
+      "guid": "node_9",
+      "name": "EF Data Description (R6)",
+      "nickname": "out",
+      "category": "Elefront (R6)",
+      "subcategory": "08 Params",
+      "x": 781.0,
+      "y": 110.0,
+      "width": 50.0,
+      "height": 20.0,
+      "bounds": {
+        "x": 756.0,
+        "y": 100.0,
+        "width": 50.0,
+        "height": 20.0
+      },
+      "inputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "out",
+          "description": "Py3: Standard output and error contents collected during script run",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 756.0,
+          "y": 110.0
+        }
+      ],
+      "outputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "out",
+          "description": "Py3: Standard output and error contents collected during script run",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 806.0,
+          "y": 110.0
+        }
+      ],
+      "type": "param",
+      "input_count": 1,
+      "output_count": 1
+    },
+    {
+      "guid": "node_10",
+      "name": "EF Data Description (R6)",
+      "nickname": "a",
+      "category": "Elefront (R6)",
+      "subcategory": "08 Params",
+      "x": 781.0,
+      "y": 130.0,
+      "width": 50.0,
+      "height": 20.0,
+      "bounds": {
+        "x": 756.0,
+        "y": 120.0,
+        "width": 50.0,
+        "height": 20.0
+      },
+      "inputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "a",
+          "description": "Py3: No conversion",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 756.0,
+          "y": 130.0
+        }
+      ],
+      "outputs": [
+        {
+          "name": "EF Data Description (R6)",
+          "nickname": "a",
+          "description": "Py3: No conversion",
+          "type": "EF_Data",
+          "access": "item",
+          "optional": false,
+          "x": 806.0,
+          "y": 130.0
+        }
+      ],
+      "type": "param",
+      "input_count": 1,
+      "output_count": 1
+    }
+  ],
+  "wires": [
+    {
+      "source_guid": "node_4",
+      "target_guid": "node_2",
+      "source_output_idx": 0,
+      "target_input_idx": 0
+    },
+    {
+      "source_guid": "node_5",
+      "target_guid": "node_2",
+      "source_output_idx": 0,
+      "target_input_idx": 1
+    },
+    {
+      "source_guid": "node_7",
+      "target_guid": "node_3",
+      "source_output_idx": 0,
+      "target_input_idx": 0
+    },
+    {
+      "source_guid": "node_8",
+      "target_guid": "node_3",
+      "source_output_idx": 0,
+      "target_input_idx": 1
+    },
+    {
+      "source_guid": "node_0",
+      "target_guid": "node_4",
+      "source_output_idx": 0,
+      "target_input_idx": 0
+    },
+    {
+      "source_guid": "node_1",
+      "target_guid": "node_5",
+      "source_output_idx": 0,
+      "target_input_idx": 0
+    },
+    {
+      "source_guid": "node_2",
+      "target_guid": "node_6",
+      "source_output_idx": 0,
+      "target_input_idx": 0
+    },
+    {
+      "source_guid": "node_6",
+      "target_guid": "node_7",
+      "source_output_idx": 0,
+      "target_input_idx": 0
+    },
+    {
+      "source_guid": "node_3",
+      "target_guid": "node_9",
+      "source_output_idx": 0,
+      "target_input_idx": 0
+    },
+    {
+      "source_guid": "node_3",
+      "target_guid": "node_10",
+      "source_output_idx": 1,
+      "target_input_idx": 0
+    }
+  ],
+  "component_count": 11,
+  "file_path": "",
+  "is_modified": true
+}

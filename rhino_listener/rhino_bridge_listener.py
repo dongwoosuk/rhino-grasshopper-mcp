@@ -4,8 +4,8 @@ Run this script inside Rhino to enable remote Python execution from the MCP serv
 
 Usage in Rhino:
 1. Open Rhino
-2. Run EditPythonScript or use _RunPythonScript
-3. Run this script - it will start listening for commands
+2. Open ScriptEditor and select Python 3 (Rhino 8)
+3. Run this script from the cloned repository - it will start listening for commands
 
 The listener creates a simple TCP server that:
 - Receives Python code from the MCP server
@@ -19,7 +19,14 @@ import json
 import sys
 import time
 import traceback
+import os
+import importlib.util
 from io import StringIO
+
+_graph_spec = importlib.util.spec_from_file_location(
+    'rhino_mcp_graph_operations', os.path.join(os.path.dirname(__file__), 'graph_operations.py'))
+_graph_ops = importlib.util.module_from_spec(_graph_spec)
+_graph_spec.loader.exec_module(_graph_ops)
 
 # Configuration
 HOST = 'localhost'
@@ -116,46 +123,15 @@ def find_component(server, name, category=None, subcategory=None):
     Returns:
         Component proxy or None
     """
-    # Use preference map if no explicit category given
     if category is None and name in PREFERRED_COMPONENTS:
         category, subcategory = PREFERRED_COMPONENTS[name]
-
-    name_lower = name.lower()
-
-    # Search for matches, preferring non-obsolete components
-    candidates = []
-
-    for proxy in server.ObjectProxies:
-        # Skip obsolete components entirely
-        if proxy.Obsolete:
-            continue
-
-        # Check name match (exact or nickname)
-        proxy_name = proxy.Desc.Name
-        proxy_nickname = proxy.Desc.NickName if hasattr(proxy.Desc, 'NickName') else ''
-
-        if proxy_name.lower() != name_lower and proxy_nickname.lower() != name_lower:
-            continue
-
-        # Check category/subcategory if specified
-        if category is not None and proxy.Desc.Category != category:
-            continue
-        if subcategory is not None and proxy.Desc.SubCategory != subcategory:
-            continue
-
-        candidates.append(proxy)
-
-    if candidates:
-        return candidates[0]
-
-    # Fallback: search again but also check partial matches (still no obsolete)
-    for proxy in server.ObjectProxies:
-        if proxy.Obsolete:
-            continue
-        if name_lower in proxy.Desc.Name.lower():
-            return proxy
-
-    return None
+    if category or subcategory:
+        matches = [p for p in _graph_ops.proxies(name, category, subcategory)
+                   if name.lower() in (p.Desc.Name.lower(), p.Desc.NickName.lower(), str(p.Guid).lower())]
+        if len(matches) != 1:
+            raise ValueError('Component missing or ambiguous; use gh_search_components and a GUID')
+        return matches[0]
+    return _graph_ops.resolve(name)
 
 
 def create_component(server, doc, name, x, y, category=None, subcategory=None):
@@ -400,6 +376,31 @@ class RhinoBridgeListener:
                 subcategory = request.get('subcategory')
                 delay = request.get('delay', 0)
                 result = self._add_component(name, x, y, nickname, category, subcategory, delay)
+            elif command == 'search_components':
+                result = self._search_components(
+                    request.get('query', ''),
+                    request.get('category'),
+                    request.get('subcategory'),
+                    request.get('limit', 30),
+                    request.get('include_deprecated', False),
+                )
+            elif command == 'move_components':
+                result = self._invoke_on_ui(lambda: _graph_ops.move_many(
+                    request.get('moves', []), request.get('layout_options'), request.get('expected_revision')))
+            elif command == 'describe_component':
+                result = self._describe_component(
+                    request.get('selector', ''),
+                    request.get('include_deprecated', False),
+                )
+            elif command == 'apply_graph':
+                result = self._apply_graph(
+                    request.get('sliders', []),
+                    request.get('components', []),
+                    request.get('wires', []),
+                    request.get('solve', True),
+                    request.get('replace', True),
+                    request.get('include_deprecated', False),
+                )
             elif command == 'connect_components':
                 source_guid = request.get('source_guid', '')
                 source_output = request.get('source_output', 0)
@@ -651,154 +652,34 @@ class RhinoBridgeListener:
 
         return status
 
+    def _search_components(self, query, category=None, subcategory=None, limit=30, include_deprecated=False):
+        def run():
+            found = _graph_ops.proxies(query, category, subcategory, include_deprecated)
+            return {'success': True, 'total': len(found), 'components': [
+                _graph_ops.describe_proxy(p) for p in found[:max(1, min(200, int(limit)))]]}
+        return self._invoke_on_ui(run)
+
+    def _describe_component(self, selector, include_deprecated=False):
+        def run():
+            p = _graph_ops.resolve(selector, include_deprecated)
+            obj = p.CreateInstance()
+            obj.CreateAttributes()
+            obj.Attributes.PerformLayout()
+            result = _graph_ops.describe_proxy(p)
+            result.update(success=True, inputs=_graph_ops.port_info(obj, 'inputs'),
+                          outputs=_graph_ops.port_info(obj, 'outputs'))
+            return result
+        return self._invoke_on_ui(run)
+
+    def _apply_graph(self, sliders, components, wires, solve=True, replace=True, include_deprecated=False):
+        return self._invoke_on_ui(lambda: _graph_ops.apply_graph(
+            sliders, components, wires, solve, replace, include_deprecated))
+
     def _get_grasshopper_state(self):
-        """Get current Grasshopper canvas state with positions and wires for ML analysis"""
-        if not IN_RHINO:
-            return {'success': False, 'error': 'Not running in Rhino'}
+        return self._invoke_on_ui(self._get_grasshopper_state_ui)
 
-        try:
-            import Grasshopper
-
-            canvas = Grasshopper.Instances.ActiveCanvas
-            if not canvas or not canvas.Document:
-                return {'success': False, 'error': 'No active Grasshopper document'}
-
-            doc = canvas.Document
-
-            components = []
-            wires = []
-
-            for obj in doc.Objects:
-                # Basic component info with position
-                comp_info = {
-                    'name': obj.Name,
-                    'nickname': obj.NickName,
-                    'guid': str(obj.InstanceGuid),
-                    'category': obj.Category if hasattr(obj, 'Category') else '',
-                    'subcategory': obj.SubCategory if hasattr(obj, 'SubCategory') else '',
-                    'x': obj.Attributes.Pivot.X,
-                    'y': obj.Attributes.Pivot.Y,
-                }
-
-                # Get bounds if available
-                try:
-                    bounds = obj.Attributes.Bounds
-                    comp_info['width'] = bounds.Width
-                    comp_info['height'] = bounds.Height
-                except:
-                    pass
-
-                # Classify object type for ML analysis
-                type_name = obj.GetType().Name
-                if 'Slider' in type_name:
-                    comp_info['type'] = 'slider'
-                elif 'Panel' in type_name:
-                    comp_info['type'] = 'panel'
-                elif 'Toggle' in type_name or 'Boolean' in type_name:
-                    comp_info['type'] = 'toggle'
-                elif 'Param' in type_name or comp_info['category'] == 'Params':
-                    comp_info['type'] = 'param'
-                elif 'Group' in type_name:
-                    comp_info['type'] = 'group'
-                elif 'Relay' in type_name:
-                    comp_info['type'] = 'relay'
-                else:
-                    comp_info['type'] = 'component'
-
-                # Get current value for sliders/panels
-                try:
-                    if comp_info['type'] == 'slider':
-                        comp_info['value'] = float(obj.Slider.Value)
-                        comp_info['min'] = float(obj.Slider.Minimum)
-                        comp_info['max'] = float(obj.Slider.Maximum)
-                    elif comp_info['type'] == 'panel':
-                        comp_info['value'] = obj.UserText[:100] if obj.UserText else ''
-                except:
-                    pass
-
-                # 입력/출력 개수 추가 (Y 정렬 계산용)
-                try:
-                    if hasattr(obj, 'Params'):
-                        if hasattr(obj.Params, 'Input'):
-                            comp_info['input_count'] = obj.Params.Input.Count
-                        if hasattr(obj.Params, 'Output'):
-                            comp_info['output_count'] = obj.Params.Output.Count
-                    # IGH_Param 직접 구현체 (Panel 등)
-                    elif hasattr(obj, 'Sources'):
-                        comp_info['input_count'] = 1
-                        comp_info['output_count'] = 1
-                except:
-                    pass
-
-                components.append(comp_info)
-
-                # Extract wire connections (for ML flow analysis)
-                # 1. 일반 컴포넌트: Params.Input의 Sources
-                if hasattr(obj, 'Params') and hasattr(obj.Params, 'Input'):
-                    for input_idx, input_param in enumerate(obj.Params.Input):
-                        for source in input_param.Sources:
-                            try:
-                                source_obj = source.Attributes.GetTopLevel.DocObject
-                                # 소스의 출력 인덱스 찾기
-                                source_output_idx = 0
-                                if hasattr(source_obj, 'Params') and hasattr(source_obj.Params, 'Output'):
-                                    for out_idx, out_param in enumerate(source_obj.Params.Output):
-                                        if out_param == source:
-                                            source_output_idx = out_idx
-                                            break
-
-                                wire_info = {
-                                    'source_guid': str(source_obj.InstanceGuid),
-                                    'target_guid': str(obj.InstanceGuid),
-                                    'source_output_idx': source_output_idx,
-                                    'target_input_idx': input_idx,
-                                }
-                                wires.append(wire_info)
-                            except:
-                                wire_info = {
-                                    'source_guid': str(source.Attributes.GetTopLevel.DocObject.InstanceGuid),
-                                    'target_guid': str(obj.InstanceGuid),
-                                }
-                                wires.append(wire_info)
-
-                # 2. Panel 등 IGH_Param 직접 구현체: 자체 Sources 속성
-                elif hasattr(obj, 'Sources'):
-                    for source in obj.Sources:
-                        try:
-                            source_obj = source.Attributes.GetTopLevel.DocObject
-                            # 소스의 출력 인덱스 찾기
-                            source_output_idx = 0
-                            if hasattr(source_obj, 'Params') and hasattr(source_obj.Params, 'Output'):
-                                for out_idx, out_param in enumerate(source_obj.Params.Output):
-                                    if out_param == source:
-                                        source_output_idx = out_idx
-                                        break
-
-                            wire_info = {
-                                'source_guid': str(source_obj.InstanceGuid),
-                                'target_guid': str(obj.InstanceGuid),
-                                'source_output_idx': source_output_idx,
-                                'target_input_idx': 0,  # Panel은 단일 입력
-                            }
-                            wires.append(wire_info)
-                        except:
-                            pass
-
-            return {
-                'success': True,
-                'component_count': doc.ObjectCount,
-                'components': components,
-                'wires': wires,
-                'file_path': doc.FilePath or '',
-                'is_modified': doc.IsModified,
-            }
-
-        except Exception as e:
-            return {
-                'success': False,
-                'error': str(e),
-                'traceback': traceback.format_exc()
-            }
+    def _get_grasshopper_state_ui(self):
+        return _graph_ops.snapshot(_graph_ops.document())
 
     def _load_gh_definition(self, file_path):
         """Load a Grasshopper definition"""
@@ -1500,30 +1381,27 @@ class RhinoBridgeListener:
 
         SetSource closes the component's ScriptEditor window when it is open, which is a
         WPF UI-thread-only operation; calling it from this background listener thread
-        otherwise throws 'The calling thread cannot access this object...'. Falls back to
-        a direct call if marshaling is unavailable (e.g. already on the UI thread)."""
+        otherwise throws 'The calling thread cannot access this object...'. Never retries a timed-out mutation on the listener thread."""
         import Rhino
         import System
         from System.Threading import ManualResetEvent
         box = {}
-        marshaled = False
-        try:
-            evt = ManualResetEvent(False)
+        evt = ManualResetEvent(False)
+        cancelled = threading.Event()
 
-            def _run():
-                try:
+        def _run():
+            try:
+                if not cancelled.is_set():
                     box['result'] = func()
-                except Exception as e:
-                    box['exc'] = e
-                finally:
-                    evt.Set()
+            except Exception as e:
+                box['exc'] = e
+            finally:
+                evt.Set()
 
-            Rhino.RhinoApp.InvokeOnUiThread(System.Action(_run))
-            marshaled = evt.WaitOne(120000)
-        except Exception:
-            marshaled = False
-        if not marshaled:
-            return func()
+        Rhino.RhinoApp.InvokeOnUiThread(System.Action(_run))
+        if not evt.WaitOne(120000):
+            cancelled.set()
+            raise RuntimeError('Rhino UI operation timed out; do not retry without checking canvas state')
         if 'exc' in box:
             raise box['exc']
         return box.get('result')

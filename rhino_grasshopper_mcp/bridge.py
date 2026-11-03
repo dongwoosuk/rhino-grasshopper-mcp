@@ -473,6 +473,80 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
+            name="gh_search_components",
+            description=(
+                "Search the live Grasshopper component server by name, nickname, category, "
+                "or subcategory. Obsolete and hidden components are excluded by default. "
+                "Use the returned proxy GUID to avoid ambiguous name matches."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "category": {"type": "string"},
+                    "subcategory": {"type": "string"},
+                    "limit": {"type": "integer", "default": 30},
+                    "include_deprecated": {"type": "boolean", "default": False}
+                },
+                "required": ["query"]
+            }
+        ),
+        Tool(
+            name="gh_describe_component",
+            description=(
+                "Describe a live Grasshopper component before placement. Returns its proxy GUID, "
+                "category, description, and input/output names, nicknames, types, access, and optional flags."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string", "description": "Component name, nickname, or proxy GUID"},
+                    "include_deprecated": {"type": "boolean", "default": False}
+                },
+                "required": ["selector"]
+            }
+        ),
+        Tool(
+            name="gh_apply_graph",
+            description=(
+                "Place sliders and components, connect them by caller-supplied keys, and solve once. "
+                "Preflights all objects and wires before mutation; returns GUIDs and solve diagnostics. Adds Elefront Name View descriptions. Names exclude "
+                "obsolete components even by GUID; use proxy GUIDs when a name is ambiguous."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "sliders": {
+                        "type": "array",
+                        "items": {"type": "object", "additionalProperties": False, "properties": {
+                            "key": {"type": "string"}, "min": {"type": "number"},
+                            "value": {"type": "number"}, "max": {"type": "number"},
+                            "type": {"type": "string", "enum": ["float", "int", "even", "odd"]},
+                            "name": {"type": "string"}, "x": {"type": "number"}, "y": {"type": "number"}
+                        }, "required": ["key", "min", "value", "max", "x", "y"]}
+                    },
+                    "components": {
+                        "type": "array",
+                        "items": {"type": "object", "additionalProperties": False, "properties": {
+                            "key": {"type": "string"}, "selector": {"type": "string"},
+                            "x": {"type": "number"}, "y": {"type": "number"},
+                            "nickname": {"type": "string"}
+                        }, "required": ["key", "selector", "x", "y"]}
+                    },
+                    "wires": {
+                        "type": "array",
+                        "items": {"type": "object", "additionalProperties": False, "properties": {
+                            "src_key": {"type": "string"}, "src": {},
+                            "dst_key": {"type": "string"}, "dst": {}
+                        }, "required": ["src_key", "src", "dst_key", "dst"]}
+                    },
+                    "solve": {"type": "boolean", "default": True},
+                    "replace": {"type": "boolean", "default": True},
+                    "include_deprecated": {"type": "boolean", "default": False}
+                }
+            }
+        ),
+        Tool(
             name="gh_connect",
             description="Connect two components with a wire. Use output/input indices (0-based).",
             inputSchema={
@@ -820,7 +894,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ml_auto_layout",
-            description="Automatically arrange all components on the canvas using learned layout patterns. Uses topological sorting and connection-type-specific spacing to create clean, organized layouts.",
+            description="Arrange the canvas using measured port grips, component bounds, and learned spacing. Reports horizontal-wire metrics; rejects cycles and stale moves. Use dry_run to preview.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -841,7 +915,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "use_v9": {
                         "type": "boolean",
-                        "description": "If true, use v9 algorithm with pattern-based layout (Sequence, Branching, Merging patterns). Default: true",
+                        "description": "Deprecated compatibility argument; measured_ports_v2 is always used.",
                         "default": True
                     }
                 }
@@ -1460,6 +1534,37 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             )
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
+        elif name == "gh_search_components":
+            bridge = get_bridge()
+            result = await bridge.search_components(
+                query=arguments.get("query", ""),
+                category=arguments.get("category"),
+                subcategory=arguments.get("subcategory"),
+                limit=arguments.get("limit", 30),
+                include_deprecated=arguments.get("include_deprecated", False),
+            )
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        elif name == "gh_describe_component":
+            bridge = get_bridge()
+            result = await bridge.describe_component(
+                selector=arguments.get("selector", ""),
+                include_deprecated=arguments.get("include_deprecated", False),
+            )
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        elif name == "gh_apply_graph":
+            bridge = get_bridge()
+            result = await bridge.apply_graph(
+                sliders=arguments.get("sliders", []),
+                components=arguments.get("components", []),
+                wires=arguments.get("wires", []),
+                solve=arguments.get("solve", True),
+                replace=arguments.get("replace", True),
+                include_deprecated=arguments.get("include_deprecated", False),
+            )
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
         elif name == "gh_connect":
             source_guid = arguments.get("source_guid", "")
             source_output = arguments.get("source_output", 0)
@@ -1808,14 +1913,15 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             # Calculate layout
             learner = get_persistent_learner()
 
-            # v1: New hierarchical pattern-based layout (Main Chain + Fan-In/Out)
-            # This is now the default algorithm
-            layout_result = learner.calculate_auto_layout_v1(
+            # Learned spacing remains a preference; measured geometry constrains it.
+            from .port_layout import calculate_layout
+            layout_result = calculate_layout(
                 components=components,
                 wires=wires,
                 start_x=start_x,
                 start_y=start_y,
-                mode="full"
+                spacing_x=max(40, learner.spacing_pattern.avg_x),
+                spacing_y=max(20, learner.spacing_pattern.avg_y)
             )
 
             if not layout_result.get("success"):
@@ -1832,44 +1938,15 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
             # Apply moves
             moves = layout_result.get("moves", [])
-            successful_moves = 0
-            failed_moves = []
-
-            for move in moves:
-                guid = move["guid"]
-                new_x = move["new_x"]
-                new_y = move["new_y"]
-
-                try:
-                    move_result = await bridge.move_component(guid, new_x, new_y)
-                    if move_result.get("success"):
-                        successful_moves += 1
-                    else:
-                        failed_moves.append({
-                            "guid": guid,
-                            "name": move.get("name", ""),
-                            "error": move_result.get("error", "Unknown error")
-                        })
-                except Exception as e:
-                    failed_moves.append({
-                        "guid": guid,
-                        "name": move.get("name", ""),
-                        "error": str(e)
-                    })
-
-            result = {
-                "success": True,
-                "total_components": layout_result.get("total_components", 0),
-                "components_moved": successful_moves,
-                "failed_moves": len(failed_moves),
-                "levels_created": layout_result.get("levels_created", 0),
-                "spacing_used": layout_result.get("spacing_used", {}),
-            }
-
-            if failed_moves:
-                result["failed_details"] = failed_moves[:10]  # Limit to first 10 failures
-
+            result = await bridge.move_components(moves, {
+                'start_x': start_x, 'start_y': start_y,
+                'spacing_x': layout_result['spacing_used']['x'],
+                'spacing_y': layout_result['spacing_used']['y']},
+                expected_revision=canvas_state.get('revision'))
+            result.setdefault('metrics', layout_result.get('metrics', {}))
+            result['algorithm'] = layout_result.get('algorithm')
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
 
         elif name == "ml_learn_from_files":
             if not _persistent_learner_available:

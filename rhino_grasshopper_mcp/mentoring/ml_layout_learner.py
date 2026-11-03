@@ -176,8 +176,8 @@ class MLLayoutLearner:
         coords = []
 
         for guid, comp in self._component_data.items():
-            x = comp.get('x') or comp.get('position_x')
-            y = comp.get('y') or comp.get('position_y')
+            x = comp.get('x', comp.get('position_x'))
+            y = comp.get('y', comp.get('position_y'))
             if x is not None and y is not None:
                 guids.append(guid)
                 coords.append([float(x), float(y)])
@@ -267,8 +267,8 @@ class MLLayoutLearner:
         coords = []
 
         for guid, comp in self._component_data.items():
-            x = comp.get('x') or comp.get('position_x')
-            y = comp.get('y') or comp.get('position_y')
+            x = comp.get('x', comp.get('position_x'))
+            y = comp.get('y', comp.get('position_y'))
             if x is not None and y is not None:
                 guids.append(guid)
                 coords.append([float(x), float(y)])
@@ -357,8 +357,8 @@ class MLLayoutLearner:
                 coords = []
                 for guid in component:
                     comp = self._component_data.get(guid, {})
-                    x = comp.get('x') or comp.get('position_x')
-                    y = comp.get('y') or comp.get('position_y')
+                    x = comp.get('x', comp.get('position_x'))
+                    y = comp.get('y', comp.get('position_y'))
                     if x is not None and y is not None:
                         coords.append((float(x), float(y)))
 
@@ -473,8 +473,8 @@ class MLLayoutLearner:
 
         if connected_to and connected_to in self._component_data:
             comp = self._component_data[connected_to]
-            base_x = float(comp.get('x') or comp.get('position_x') or 0)
-            base_y = float(comp.get('y') or comp.get('position_y') or 0)
+            base_x = float(comp.get('x', comp.get('position_x')) or 0)
+            base_y = float(comp.get('y', comp.get('position_y')) or 0)
 
             predicted_x = base_x + base_offset[0]
             predicted_y = base_y + base_offset[1]
@@ -499,8 +499,8 @@ class MLLayoutLearner:
                 all_x = []
                 all_y = []
                 for comp in self._component_data.values():
-                    x = comp.get('x') or comp.get('position_x')
-                    y = comp.get('y') or comp.get('position_y')
+                    x = comp.get('x', comp.get('position_x'))
+                    y = comp.get('y', comp.get('position_y'))
                     if x is not None and y is not None:
                         all_x.append(float(x))
                         all_y.append(float(y))
@@ -576,8 +576,8 @@ class MLLayoutLearner:
         # 위치 데이터 수집
         positions = {}
         for guid, comp in self._component_data.items():
-            x = comp.get('x') or comp.get('position_x')
-            y = comp.get('y') or comp.get('position_y')
+            x = comp.get('x', comp.get('position_x'))
+            y = comp.get('y', comp.get('position_y'))
             if x is not None and y is not None:
                 positions[guid] = (float(x), float(y))
 
@@ -660,8 +660,8 @@ class MLLayoutLearner:
             if guid not in self._component_data:
                 continue
             comp = self._component_data[guid]
-            x1 = comp.get('x') or comp.get('position_x')
-            y1 = comp.get('y') or comp.get('position_y')
+            x1 = comp.get('x', comp.get('position_x'))
+            y1 = comp.get('y', comp.get('position_y'))
 
             if x1 is None or y1 is None:
                 continue
@@ -670,8 +670,8 @@ class MLLayoutLearner:
                 if neighbor_guid not in self._component_data:
                     continue
                 neighbor = self._component_data[neighbor_guid]
-                x2 = neighbor.get('x') or neighbor.get('position_x')
-                y2 = neighbor.get('y') or neighbor.get('position_y')
+                x2 = neighbor.get('x', neighbor.get('position_x'))
+                y2 = neighbor.get('y', neighbor.get('position_y'))
 
                 if x2 is None or y2 is None:
                     continue
@@ -845,8 +845,8 @@ def create_ml_learner_from_canvas_data(
                 'name': comp.get('name', ''),
                 'category': comp.get('category', ''),
                 'nickname': comp.get('nickname', ''),
-                'x': comp.get('x') or comp.get('position_x'),
-                'y': comp.get('y') or comp.get('position_y'),
+                'x': comp.get('x', comp.get('position_x')),
+                'y': comp.get('y', comp.get('position_y')),
             }
 
     learner.set_component_data(comp_data)

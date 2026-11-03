@@ -283,8 +283,8 @@ class AdvancedLayoutLearner:
             {x, y, confidence, method, details}
         """
         source_name = source_comp.get('name', '')
-        source_x = float(source_comp.get('x') or source_comp.get('position_x') or 0)
-        source_y = float(source_comp.get('y') or source_comp.get('position_y') or 0)
+        source_x = float(source_comp.get('x', source_comp.get('position_x')) or 0)
+        source_y = float(source_comp.get('y', source_comp.get('position_y')) or 0)
 
         context = context or {}
 
@@ -385,7 +385,7 @@ class AdvancedLayoutLearner:
         Returns:
             {y_positions: List[float], spacing, distribution, confidence}
         """
-        source_y = float(source_comp.get('y') or source_comp.get('position_y') or 0)
+        source_y = float(source_comp.get('y', source_comp.get('position_y')) or 0)
 
         pattern_key = f"1_to_{target_count}"
 

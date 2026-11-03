@@ -71,8 +71,13 @@ Add to your `claude_desktop_config.json`:
 To enable real-time Rhino/Grasshopper control:
 
 1. Open Rhino 7 or 8
-2. Run `EditPythonScript` command
-3. Open and run `rhino_listener/rhino_bridge_listener.py`
+2. Run `ScriptEditor` in Rhino 8 and select **Python 3**
+3. Open and run `rhino_listener/rhino_bridge_listener.py` with Python 3.
+   Keep the cloned repository structure: the listener also needs its sibling
+   `graph_operations.py` and `rhino_grasshopper_mcp/port_layout.py`.
+   New batch graphs use Elefront **EF Data Description (R6)**; install Elefront
+   before using `gh_apply_graph`. Do not launch this listener with the legacy
+   `EditPythonScript` / IronPython editor.
 4. You'll see: `Rhino Bridge Listener started on localhost:8080`
 
 ## 📚 Available Tools
@@ -177,3 +182,9 @@ Dongwoo Suk - Computational Design Specialist
 
 - GitHub: [dongwoosuk](https://github.com/dongwoosuk)
 - LinkedIn: [dongwoosuk](https://www.linkedin.com/in/dongwoosuk/)
+
+## Graph and layout update
+
+See [upgrade notes and validation](UPGRADE_NOTES.md) for measured-port layout,
+batch graph tools, Rhino 8 Python 3 defaults and Elefront Name View descriptions.
+Keep the repository folder structure when updating the listener.

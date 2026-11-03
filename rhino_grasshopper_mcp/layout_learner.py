@@ -4,6 +4,7 @@ Learns and applies user's preferred Grasshopper canvas layout patterns.
 """
 
 import json
+import copy
 import os
 import gzip
 import xml.etree.ElementTree as ET
@@ -54,7 +55,7 @@ class LayoutLearner:
                     return json.load(f)
             except (json.JSONDecodeError, IOError):
                 pass
-        return self.DEFAULT_PREFERENCES.copy()
+        return copy.deepcopy(self.DEFAULT_PREFERENCES)
 
     def save_preferences(self):
         """Save preferences to JSON file"""
